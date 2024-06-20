@@ -24,8 +24,8 @@ fn fail_on_empty_directory(name: &str) {
 
 fn bindgen_rocksdb() {
     let bindings = bindgen::Builder::default()
-        .clang_arg("-I rocksdb/include/")
-        .clang_arg("-I rocksdb/")
+        .clang_arg("-Irocksdb/include/")
+        .clang_arg("-Irocksdb/")
         .header("rocksdb_ext/rocksdb_ext/c.h")
         .derive_debug(false)
         .blocklist_type("max_align_t") // https://github.com/rust-lang-nursery/rust-bindgen/issues/550
