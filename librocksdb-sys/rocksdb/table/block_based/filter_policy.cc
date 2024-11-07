@@ -77,6 +77,7 @@ class XXPH3FilterBitsBuilder : public BuiltinFilterBitsBuilder {
   void AddKey(const Slice& key) override {
     // Check the key for MAGIC bytes and if it contains magic bytes, only add the prefix bytes to the hash
     std::cout << "Adding key: " << key.ToString() << std::endl;
+    std::cerr << "Adding key: " << key.ToString() << std::endl;
     uint64_t hash = GetSliceHash64(key);
     // Especially with prefixes, it is common to have repetition,
     // though only adjacent repetition, which we want to immediately
@@ -316,6 +317,7 @@ class FastLocalBloomBitsBuilder : public XXPH3FilterBitsBuilder {
       : XXPH3FilterBitsBuilder(aggregate_rounding_balance, cache_res_mgr,
                                detect_filter_construct_corruption),
         millibits_per_key_(millibits_per_key) {
+    std::cout << "constructung BloomFilterPolicy with GetFastLocalBloomBuilderWithContext" << std::endl;
     assert(millibits_per_key >= 1000);
   }
 
@@ -328,10 +330,14 @@ class FastLocalBloomBitsBuilder : public XXPH3FilterBitsBuilder {
   using FilterBitsBuilder::Finish;
 
   Slice Finish(std::unique_ptr<const char[]>* buf) override {
+    std::cerr << "Finish11" << std::endl;
+    std::cout << "Finish11" << std::endl;
     return Finish(buf, nullptr);
   }
 
   Slice Finish(std::unique_ptr<const char[]>* buf, Status* status) override {
+    std::cerr << "Finish" << std::endl;
+    std::cout << "Finish" << std::endl;
     size_t num_entries = hash_entries_info_.entries.size();
     size_t len_with_metadata = CalculateSpace(num_entries);
 
@@ -1384,11 +1390,17 @@ BloomFilterPolicy::BloomFilterPolicy(double bits_per_key)
 FilterBitsBuilder* BloomFilterPolicy::GetBuilderWithContext(
     const FilterBuildingContext& context) const {
   if (GetMillibitsPerKey() == 0) {
+    std::cout << "BloomFilterPolicy with GetBuilderWithContext" << std::endl;
+    std::cerr << "BloomFilterPolicy with GetBuilderWithContext" << std::endl;
     // "No filter" special case
     return nullptr;
   } else if (context.table_options.format_version < 5) {
+    std::cout << "BloomFilterPolicy with GetLegacyBloomBuilderWithContext" << std::endl;
+    std::cerr << "BloomFilterPolicy with GetLegacyBloomBuilderWithContext" << std::endl;
     return GetLegacyBloomBuilderWithContext(context);
   } else {
+    std::cout << "BloomFilterPolicy with GetFastLocalBloomBuilderWithContext" << std::endl;
+    std::cerr << "BloomFilterPolicy with GetFastLocalBloomBuilderWithContext" << std::endl;
     return GetFastLocalBloomBuilderWithContext(context);
   }
 }
@@ -1725,6 +1737,8 @@ const FilterPolicy* NewBloomFilterPolicy(double bits_per_key,
                                          bool /*use_block_based_builder*/) {
   // NOTE: use_block_based_builder now ignored so block-based filter is no
   // longer accessible in public API.
+  std::cout << "NewBloomFilterPolicy" << bits_per_key << std::endl;
+  std::cerr << "NewBloomFilterPolicy" << bits_per_key << std::endl;
   return new BloomFilterPolicy(bits_per_key);
 }
 
