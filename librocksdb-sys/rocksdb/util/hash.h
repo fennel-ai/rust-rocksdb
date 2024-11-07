@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <iostream>
 #include <cstddef>
 #include <cstdint>
 
@@ -95,6 +96,7 @@ inline uint32_t BloomHash(const Slice& key) {
 }
 
 inline uint64_t GetSliceHash64(const Slice& key) {
+  std::cout << "GetSliceHash64:" << key.ToString() << std::endl;
   return Hash64(key.data(), key.size());
 }
 // Provided for convenience for use with template argument deduction, where a
