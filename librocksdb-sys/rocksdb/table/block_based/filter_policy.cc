@@ -37,6 +37,7 @@
 #include "util/ribbon_impl.h"
 #include "util/string_util.h"
 
+const unsigned char MAGIC_BYTES[] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
 namespace ROCKSDB_NAMESPACE {
 
 namespace {
@@ -76,8 +77,36 @@ class XXPH3FilterBitsBuilder : public BuiltinFilterBitsBuilder {
 
   void AddKey(const Slice& key) override {
     // Check the key for MAGIC bytes and if it contains magic bytes, only add the prefix bytes to the hash
-    std::cout << "Adding key: " << key.ToString() << std::endl;
-    std::cerr << "Adding key: " << key.ToString() << std::endl;
+    if (key.size() >= sizeof(MAGIC_BYTES) &&
+        memcmp(key.data(), MAGIC_BYTES, sizeof(MAGIC_BYTES)) == 0) {
+        std::cout << "Found magic bytes" << std::endl;
+      // Extract bytes before magic bytes (A)
+      size_t prefix_len = 0;
+      for (; prefix_len < key.size() - sizeof(MAGIC_BYTES); prefix_len++) {
+        if (memcmp(key.data() + prefix_len, MAGIC_BYTES, sizeof(MAGIC_BYTES)) == 0) {
+          break;
+        }
+      }
+      
+      // Position after magic bytes where key length and key start
+      const char* p = key.data() + prefix_len + sizeof(MAGIC_BYTES);
+      
+      // Calculate total size needed (A + B + C)
+      size_t remaining = key.size() - prefix_len - sizeof(MAGIC_BYTES);
+      size_t total_size = prefix_len + remaining;
+      
+      // Create new buffer and copy parts
+      std::string buffer;
+      buffer.reserve(total_size);
+      buffer.append(key.data(), prefix_len); // Copy A
+      buffer.append(p, remaining); // Copy B + C
+      
+      Slice filtered(buffer.data(), total_size);
+      std::cout << "Adding key with magic bytes stripped: " << filtered.ToString() << std::endl;
+    } else {
+      std::cout << "Adding key: " << key.ToString() << std::endl;
+    }
+    
     uint64_t hash = GetSliceHash64(key);
     // Especially with prefixes, it is common to have repetition,
     // though only adjacent repetition, which we want to immediately
@@ -1737,8 +1766,8 @@ const FilterPolicy* NewBloomFilterPolicy(double bits_per_key,
                                          bool /*use_block_based_builder*/) {
   // NOTE: use_block_based_builder now ignored so block-based filter is no
   // longer accessible in public API.
-  std::cout << "NewBloomFilterPolicy" << bits_per_key << std::endl;
-  std::cerr << "NewBloomFilterPolicy" << bits_per_key << std::endl;
+  std::cout << "NewBloomFilterPolicy " << bits_per_key << std::endl;
+  std::cerr << "NewBloomFilterPolicy " << bits_per_key << std::endl;
   return new BloomFilterPolicy(bits_per_key);
 }
 
