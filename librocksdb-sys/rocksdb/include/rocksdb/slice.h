@@ -111,16 +111,12 @@ class Slice {
  Slice extract_key_without_magic_bytes(std::string& buffer) const {
         const char* ptr = data_;
         const char* end = data_ + size_;
-
         // Clear the buffer to start fresh
         buffer.clear();
 
         try {
             // Read the varint to get family_len
             auto [family_len, family_varint_length] = read_varint(ptr, end);
-
-            std::cout << "Family length: " << family_len << std::endl;
-            std::cout << "Family varint bytes read: " << family_varint_length << std::endl;
 
             // Ensure there's enough data for family bytes
             if (ptr + family_len > end) {
@@ -129,10 +125,7 @@ class Slice {
 
             // Pointer to potential magic bytes
             ptr += family_len;
-
             bool magic_present = false;
-            std::cout << "Magic bytes pointer: " << std::string(ptr, end) << std::endl;
-
             // Check if magic bytes are present
             if (ptr + MAGIC_BYTES_LENGTH <= end) {
                 if (std::memcmp(ptr, MAGIC_BYTES, MAGIC_BYTES_LENGTH) == 0) {
@@ -143,24 +136,13 @@ class Slice {
 
             // Append varint and family bytes
             buffer.append(data_, family_varint_length + family_len);
-            // print current buffer
-            std::cout << "Current buffer: " << buffer << " size: " << buffer.size() << std::endl;
-
             // Skip magic bytes
             ptr += MAGIC_BYTES_LENGTH;
-            std::cout << "Ptr after skipping magic bytes: " << std::string(ptr, end) << std::endl;
             // Read key length varint
             const char* read_from = ptr;
             auto [key_len, key_varint_length] = read_varint(ptr, end);
-            std::cout << "\n Key length: \n" << key_len << "\n" << std::endl;
-            std::cout << "Key length varint length: " << key_varint_length << std::endl;
-
             // Append key length varint
             buffer.append(read_from, key_varint_length + key_len);
-            std::cout << "\n Current buffer: \n" << buffer << " size: " << buffer.size() << std::endl;
-
-            // Now, buffer contains [Key Length (Varint)][Key]
-
             // Return a new Slice pointing to the buffer's data
             return Slice(buffer.data(), buffer.size());
 
