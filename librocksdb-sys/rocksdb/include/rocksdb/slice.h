@@ -17,7 +17,7 @@
 // external synchronization.
 
 #pragma once
-
+#include <iostream>
 #include <cassert>
 #include <cstddef>
 #include <cstdio>
@@ -26,8 +26,27 @@
 #include <string_view>  // RocksDB now requires C++17 support
 
 #include "rocksdb/cleanable.h"
+const unsigned char MAGIC_BYTES[] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
+const size_t MAGIC_BYTES_LENGTH = sizeof(MAGIC_BYTES);
 
 namespace ROCKSDB_NAMESPACE {
+
+std::pair<uint32_t, uint32_t> read_varint(const char*& p, const char* end) {
+    uint32_t result = 0;
+    int shift = 0;
+    size_t bytes_read = 0;
+    while (p < end && shift <= 28) {
+        uint8_t byte = static_cast<uint8_t>(*p++);
+        result |= (byte & 0x7F) << shift;
+        bytes_read++;
+        if (!(byte & 0x80)) {
+            return {result, bytes_read};
+        }
+        shift += 7;
+    }
+    throw std::runtime_error("Failed to read varint: buffer too small or malformed varint");
+}
+
 
 class Slice {
  public:
@@ -61,6 +80,96 @@ class Slice {
 
   // Return true iff the length of the referenced data is zero
   bool empty() const { return size_ == 0; }
+
+  bool has_magic_bytes(const char* data, size_t size) const {
+      const char* ptr = data;
+      const char* end = data + size;
+
+      // Read the varint to get family_len
+      auto [family_len, varint_length] = read_varint(ptr, end);
+
+      // Ensure there's enough data for family bytes
+      if (ptr + family_len > end) {
+          return false;
+      }
+
+      // Skip over the family bytes
+      ptr += family_len;
+
+      if (ptr + MAGIC_BYTES_LENGTH <= end) {
+          // Compare the next 8 bytes with the magic bytes
+          if (std::memcmp(ptr, MAGIC_BYTES, MAGIC_BYTES_LENGTH) == 0) {
+              return true;
+          }
+      }
+
+      return false;
+  }
+
+// The buffer must remain valid as long as the returned Slice is used
+// Typically, you would manage this buffer outside or within a higher-level structure
+ Slice extract_key_without_magic_bytes(std::string& buffer) const {
+        const char* ptr = data_;
+        const char* end = data_ + size_;
+
+        // Clear the buffer to start fresh
+        buffer.clear();
+
+        try {
+            // Read the varint to get family_len
+            auto [family_len, family_varint_length] = read_varint(ptr, end);
+
+            std::cout << "Family length: " << family_len << std::endl;
+            std::cout << "Family varint bytes read: " << family_varint_length << std::endl;
+
+            // Ensure there's enough data for family bytes
+            if (ptr + family_len > end) {
+                throw std::runtime_error("Buffer too small for family bytes");
+            }
+
+            // Pointer to potential magic bytes
+            ptr += family_len;
+
+            bool magic_present = false;
+            std::cout << "Magic bytes pointer: " << std::string(ptr, end) << std::endl;
+
+            // Check if magic bytes are present
+            if (ptr + MAGIC_BYTES_LENGTH <= end) {
+                if (std::memcmp(ptr, MAGIC_BYTES, MAGIC_BYTES_LENGTH) == 0) {
+                    magic_present = true;
+                }
+            }
+            assert(magic_present == true && "Magic bytes are not present");
+
+            // Append varint and family bytes
+            buffer.append(data_, family_varint_length + family_len);
+            // print current buffer
+            std::cout << "Current buffer: " << buffer << " size: " << buffer.size() << std::endl;
+
+            // Skip magic bytes
+            ptr += MAGIC_BYTES_LENGTH;
+            std::cout << "Ptr after skipping magic bytes: " << std::string(ptr, end) << std::endl;
+            // Read key length varint
+            const char* read_from = ptr;
+            auto [key_len, key_varint_length] = read_varint(ptr, end);
+            std::cout << "\n Key length: \n" << key_len << "\n" << std::endl;
+            std::cout << "Key length varint length: " << key_varint_length << std::endl;
+
+            // Append key length varint
+            buffer.append(read_from, key_varint_length + key_len);
+            std::cout << "\n Current buffer: \n" << buffer << " size: " << buffer.size() << std::endl;
+
+            // Now, buffer contains [Key Length (Varint)][Key]
+
+            // Return a new Slice pointing to the buffer's data
+            return Slice(buffer.data(), buffer.size());
+
+        } catch (const std::exception& e) {
+            // panic if any error occurs
+            assert(false && ("Error extracting key without magic bytes: " + std::string(e.what())).c_str());
+        }
+    }
+
 
   // Return the ith byte in the referenced data.
   // REQUIRES: n < size()
@@ -203,6 +312,7 @@ class PinnableSlice : public Slice, public Cleanable {
       PinSelf();
     }
   }
+
 
   void Reset() {
     Cleanable::Reset();

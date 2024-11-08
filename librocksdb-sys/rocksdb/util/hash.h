@@ -96,9 +96,17 @@ inline uint32_t BloomHash(const Slice& key) {
 }
 
 inline uint64_t GetSliceHash64(const Slice& key) {
-  std::cout << "GetSliceHash64:" << key.ToString() << std::endl;
-  return Hash64(key.data(), key.size());
-}
+  if (key.has_magic_bytes(key.data(), key.size())) {
+     std::string buffer;
+     // 8 bytes for magic bytes
+     buffer.resize(key.size() - 8);
+     ROCKSDB_NAMESPACE::Slice extracted_key = key.extract_key_without_magic_bytes(buffer);
+    return Hash64(extracted_key.data(), extracted_key.size());
+  } else {
+    return Hash64(key.data(), key.size());
+  }
+ }
+ 
 // Provided for convenience for use with template argument deduction, where a
 // specific overload needs to be used.
 extern uint64_t (*kGetSliceNPHash64UnseededFnPtr)(const Slice&);

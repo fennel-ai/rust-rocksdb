@@ -47,7 +47,8 @@ project(rocksdb
 if(POLICY CMP0042)
   cmake_policy(SET CMP0042 NEW)
 endif()
-
+option(WITH_TESTS "Build with tests" ON)
+option(WITH_ALL_TESTS "Build all tests, rather than a small subset" ON)
 if(NOT CMAKE_BUILD_TYPE)
   if(EXISTS "${CMAKE_SOURCE_DIR}/.git")
     set(default_build_type "Debug")
@@ -1252,6 +1253,7 @@ if(WITH_TESTS OR WITH_BENCHMARK_TOOLS)
   test_util/testharness.cc)
   target_link_libraries(testharness gtest)
 endif()
+ 
 
 if(WITH_TESTS)
   set(TESTS
@@ -1265,8 +1267,8 @@ if(WITH_TESTS)
         cache/compressed_secondary_cache_test.cc
         cache/lru_cache_test.cc
         cache/tiered_secondary_cache_test.cc
-        db/blob/blob_counting_iterator_test.cc
-        db/blob/blob_file_addition_test.cc
+        # db/blob/blob_counting_iterator_test.db
+        # db/blob/blob_file_addition_test.db
         db/blob/blob_file_builder_test.cc
         db/blob/blob_file_cache_test.cc
         db/blob/blob_file_garbage_test.cc

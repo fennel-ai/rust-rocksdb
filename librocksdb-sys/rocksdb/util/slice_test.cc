@@ -23,6 +23,123 @@ TEST(SliceTest, StringView) {
   ASSERT_EQ(Slice(s), Slice(std::move(sv)));
 }
 
+std::string base64_decode(const std::string& encoded) {
+    static const std::string base64_chars = 
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz"
+        "0123456789+/";
+
+    std::string decoded;
+    int val = 0, valb = -8;
+    
+    for (unsigned char c : encoded) {
+        if (c == '=') break;
+        
+        size_t pos = base64_chars.find(c);
+        if (pos == std::string::npos) continue;
+        
+        val = (val << 6) + pos;
+        valb += 6;
+        
+        if (valb >= 0) {
+            decoded.push_back(char((val >> valb) & 0xFF));
+            valb -= 8;
+        }
+    }
+    
+    return decoded;
+}
+
+// Write a varint to the buffer for testing purposes
+void write_varint(char*& p, uint32_t value) {
+    while (value >= 0x80) { // While there are more than 7 bits
+        *p++ = static_cast<char>((value & 0x7F) | 0x80); // Set the MSB to 1 to indicate more bytes
+        value >>= 7; // Shift the value by 7 bits to process the next 7 bits
+    }
+    *p++ = static_cast<char>(value & 0x7F); // Last byte with MSB set to 0
+}
+
+
+TEST(SliceTest, MagicBytes) {
+  // Basic test with magic bytes
+  std::string test_key = "\ttest:kfam\x01\x02\x03\x04\x05\x06\x07\x08\x01c\0\0\0\0\0\0\0\0";
+  Slice s(test_key);
+  ASSERT_TRUE(s.has_magic_bytes(test_key.data(), test_key.size()));
+
+  // Test with base64 encoded key containing magic bytes
+  std::string base64_encoded = "DXRlc3Q6a2ZhbXRlc3QBAgMEBQYHCAFjAAAAAAAAAAJyljxiihpLPIOeS6vfEiep";
+  std::string decoded_key = base64_decode(base64_encoded);
+  Slice test_slice(decoded_key);
+  ASSERT_TRUE(test_slice.has_magic_bytes(decoded_key.data(), decoded_key.size()));
+
+  // Test extract_key_without_magic_bytes
+  std::string buffer;
+  buffer.resize(decoded_key.size());
+  Slice extracted_slice = test_slice.extract_key_without_magic_bytes(buffer);
+  // 8 bytes for magic bytes, 16 bytes for varint, 8 bytes for key length
+  ASSERT_EQ(buffer.size(), decoded_key.size() - MAGIC_BYTES_LENGTH - 16 - 8);
+
+  // Test with another base64 encoded key
+  std::string base64_encoded2 = "DXRlc3Q6a2ZhbXRlc3QBAgMEBQYHCAFjAAAAAAAAAAA=";
+  std::string decoded_key2 = base64_decode(base64_encoded2);
+  Slice test_slice_2(decoded_key2);
+  ASSERT_TRUE(test_slice_2.has_magic_bytes(decoded_key2.data(), decoded_key2.size()));
+
+  std::string buffer_2;
+  buffer_2.resize(decoded_key2.size());
+  Slice extracted_slice_2 = test_slice_2.extract_key_without_magic_bytes(buffer_2);
+  // 8 bytes for magic bytes, 8  bytes for ts as i64 
+  ASSERT_EQ(buffer_2.size(), decoded_key2.size() - MAGIC_BYTES_LENGTH - 8);
+
+  // Negative test - incorrect magic bytes
+  std::string negative_test_key("\ttest:kfam\x01\x02\x04\x04\x05\x06\x07\x08\x01c\0\0\0\0\0\0\0\0", 28);
+  Slice negative_test_slice(negative_test_key);
+  ASSERT_FALSE(negative_test_slice.has_magic_bytes(negative_test_key.data(), negative_test_key.size()));
+
+  // Test with different prefix
+  std::string another_test_key("\rtest:kfamtest\x01\x02\x03\x04\x05\x06\x07\x08\x01b\0\0\0\0\0\0\0\x03", 32);
+  Slice another_test_slice(another_test_key);
+  ASSERT_TRUE(another_test_slice.has_magic_bytes(another_test_key.data(), another_test_key.size()));
+}
+
+TEST(SliceTest, VarintEncodingDecoding) {
+  // Test varint encoding/decoding with random values
+  for (int i = 0; i < 100; i++) {
+    uint32_t value = rand();
+    std::string buffer;
+    buffer.resize(5); // Maximum 5 bytes for varint32
+    char* ptr = &buffer[0];
+    write_varint(ptr, value);
+    const char* read_ptr = buffer.data();
+    auto [read_value, bytes_read] = read_varint(read_ptr, buffer.data() + buffer.size());
+    ASSERT_EQ(value, read_value);
+  }
+
+  // Test specific edge cases
+  std::vector<uint32_t> test_cases = {
+    0,                    // Minimum value
+    127,                  // Max 1-byte value
+    128,                  // Min 2-byte value
+    16383,               // Max 2-byte value
+    16384,               // Min 3-byte value
+    2097151,             // Max 3-byte value
+    2097152,             // Min 4-byte value
+    268435455,           // Max 4-byte value
+    268435456,           // Min 5-byte value
+    std::numeric_limits<uint32_t>::max()  // Maximum value
+  };
+
+  for (uint32_t value : test_cases) {
+    std::string buffer;
+    buffer.resize(5);
+    char* ptr = &buffer[0];
+    write_varint(ptr, value);
+    const char* read_ptr = buffer.data();
+    auto [read_value, bytes_read] = read_varint(read_ptr, buffer.data() + buffer.size());
+    ASSERT_EQ(value, read_value);
+  }
+}
+
 // Use this to keep track of the cleanups that were actually performed
 void Multiplier(void* arg1, void* arg2) {
   int* res = static_cast<int*>(arg1);

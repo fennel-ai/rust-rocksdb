@@ -37,7 +37,6 @@
 #include "util/ribbon_impl.h"
 #include "util/string_util.h"
 
-const unsigned char MAGIC_BYTES[] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
 namespace ROCKSDB_NAMESPACE {
 
 namespace {
