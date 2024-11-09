@@ -31,22 +31,6 @@ const size_t MAGIC_BYTES_LENGTH = sizeof(MAGIC_BYTES);
 
 namespace ROCKSDB_NAMESPACE {
 
-std::pair<uint32_t, uint32_t> read_varint(const char*& p, const char* end) {
-    uint32_t result = 0;
-    int shift = 0;
-    size_t bytes_read = 0;
-    while (p < end && shift <= 28) {
-        uint8_t byte = static_cast<uint8_t>(*p++);
-        result |= (byte & 0x7F) << shift;
-        bytes_read++;
-        if (!(byte & 0x80)) {
-            return {result, bytes_read};
-        }
-        shift += 7;
-    }
-    throw std::runtime_error("Failed to read varint: buffer too small or malformed varint");
-}
-
 
 class Slice {
  public:
@@ -85,22 +69,26 @@ class Slice {
       const char* ptr = data;
       const char* end = data + size;
 
+   
       // Read the varint to get family_len
-      auto [family_len, varint_length] = read_varint(ptr, end);
+      try {
+        auto [family_len, varint_length] = read_varint(ptr, end);
+        // Ensure there's enough data for family bytes
+        if (ptr + family_len > end) {
+            return false;
+        }
 
-      // Ensure there's enough data for family bytes
-      if (ptr + family_len > end) {
-          return false;
-      }
+        // Skip over the family bytes
+        ptr += family_len;
 
-      // Skip over the family bytes
-      ptr += family_len;
-
-      if (ptr + MAGIC_BYTES_LENGTH <= end) {
-          // Compare the next 8 bytes with the magic bytes
-          if (std::memcmp(ptr, MAGIC_BYTES, MAGIC_BYTES_LENGTH) == 0) {
-              return true;
-          }
+        if (ptr + MAGIC_BYTES_LENGTH <= end) {
+            // Compare the next 8 bytes with the magic bytes
+            if (std::memcmp(ptr, MAGIC_BYTES, MAGIC_BYTES_LENGTH) == 0) {
+                return true;
+            }
+        }
+      } catch (const std::exception& e) {
+        return false;
       }
 
       return false;
@@ -177,6 +165,24 @@ class Slice {
     assert(n <= size());
     size_ -= n;
   }
+
+
+std::pair<uint32_t, uint32_t> read_varint(const char*& p, const char* end) const {
+    uint32_t result = 0;
+    int shift = 0;
+    size_t bytes_read = 0;
+    while (p < end && shift <= 28) {
+        uint8_t byte = static_cast<uint8_t>(*p++);
+        result |= (byte & 0x7F) << shift;
+        bytes_read++;
+        if (!(byte & 0x80)) {
+            return {result, bytes_read};
+        }
+        shift += 7;
+    }
+    throw std::runtime_error("Failed to read varint: buffer too small or malformed varint");
+}
+
 
   // Return a string that contains the copy of the referenced data.
   // when hex is true, returns a string of twice the length hex encoded (0-9A-F)

@@ -103,6 +103,7 @@ TEST(SliceTest, MagicBytes) {
 }
 
 TEST(SliceTest, VarintEncodingDecoding) {
+  Slice s = Slice("");
   // Test varint encoding/decoding with random values
   for (int i = 0; i < 100; i++) {
     uint32_t value = rand();
@@ -111,7 +112,7 @@ TEST(SliceTest, VarintEncodingDecoding) {
     char* ptr = &buffer[0];
     write_varint(ptr, value);
     const char* read_ptr = buffer.data();
-    auto [read_value, bytes_read] = read_varint(read_ptr, buffer.data() + buffer.size());
+    auto [read_value, bytes_read] = s.read_varint(read_ptr, buffer.data() + buffer.size());
     ASSERT_EQ(value, read_value);
   }
 
@@ -135,7 +136,7 @@ TEST(SliceTest, VarintEncodingDecoding) {
     char* ptr = &buffer[0];
     write_varint(ptr, value);
     const char* read_ptr = buffer.data();
-    auto [read_value, bytes_read] = read_varint(read_ptr, buffer.data() + buffer.size());
+    auto [read_value, bytes_read] = s.read_varint(read_ptr, buffer.data() + buffer.size());
     ASSERT_EQ(value, read_value);
   }
 }
