@@ -84,6 +84,10 @@ class Slice {
         if (ptr + MAGIC_BYTES_LENGTH <= end) {
             // Compare the next 8 bytes with the magic bytes
             if (std::memcmp(ptr, MAGIC_BYTES, MAGIC_BYTES_LENGTH) == 0) {
+              // 1 in 1000 times print the magic bytes
+                if (rand() % 1000 == 0) {
+                  std::cout << "Magic bytes: " << std::string(ptr, MAGIC_BYTES_LENGTH) << std::endl;
+                }
                 return true;
             }
         }
